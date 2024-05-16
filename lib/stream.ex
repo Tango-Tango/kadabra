@@ -6,6 +6,7 @@ defmodule Kadabra.Stream do
             client: nil,
             connection: nil,
             socket: nil,
+            peername: nil,
             encoder: nil,
             decoder: nil,
             flow: nil,
@@ -59,6 +60,7 @@ defmodule Kadabra.Stream do
       client: config.client,
       uri: config.uri,
       socket: config.socket,
+      peername: Socket.peername(config.socket),
       encoder: config.encoder,
       decoder: config.decoder,
       connection: self(),
@@ -68,7 +70,13 @@ defmodule Kadabra.Stream do
   end
 
   def start_link(%Stream{} = stream) do
-    :telemetry.execute([:kadabra, :stream, :start], %{}, %{stream_id: stream.id, uri: stream.uri, client: stream.client, connection: stream.connection})
+    :telemetry.execute([:kadabra, :stream, :start], %{}, %{
+      stream_id: stream.id,
+      uri: stream.uri,
+      client: stream.client,
+      connection: stream.connection
+    })
+
     :gen_statem.start_link(__MODULE__, stream, [])
   end
 
@@ -140,7 +148,9 @@ defmodule Kadabra.Stream do
 
     :gen_statem.reply(from, :ok)
 
-    response = Response.new(stream.id, stream.headers, stream.body)
+    response =
+      Response.new(stream.id, stream.headers, stream.body, stream.peername)
+
     send(stream.connection, {:push_promise, response})
     {:next_state, @reserved_remote, stream}
   end
@@ -188,7 +198,9 @@ defmodule Kadabra.Stream do
   end
 
   def handle_event(:enter, _old, @closed, stream) do
-    response = Response.new(stream.id, stream.headers, stream.body)
+    response =
+      Response.new(stream.id, stream.headers, stream.body, stream.peername)
+
     Tasks.run(stream.on_response, response)
     send(stream.client, {:end_stream, response})
 
@@ -315,7 +327,9 @@ defmodule Kadabra.Stream do
 
   def terminate(reason, _state, stream) do
     duration = System.monotonic_time() - stream.start_time
-    :telemetry.execute([:kadabra, :stream, :stop],
+
+    :telemetry.execute(
+      [:kadabra, :stream, :stop],
       %{duration: duration},
       %{
         stream_id: stream.id,
@@ -323,7 +337,9 @@ defmodule Kadabra.Stream do
         client: stream.client,
         connection: stream.connection,
         reason: reason
-      })
+      }
+    )
+
     :void
   end
 

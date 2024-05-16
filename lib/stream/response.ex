@@ -19,23 +19,25 @@ defmodule Kadabra.Stream.Response do
       }
   """
 
-  defstruct [:id, :headers, :body, :status]
+  defstruct [:id, :headers, :body, :status, :peername]
 
   @type t :: %__MODULE__{
           id: non_neg_integer,
           headers: Keyword.t(),
           body: String.t(),
-          status: integer
+          status: integer,
+          peername: any() | nil
         }
 
   @doc false
-  @spec new(non_neg_integer, Keyword.t(), String.t()) :: t
-  def new(id, headers, body) do
+  @spec new(non_neg_integer, Keyword.t(), String.t(), any() | nil) :: t
+  def new(id, headers, body, peer_name \\ nil) do
     %__MODULE__{
       id: id,
       headers: headers,
       body: body,
-      status: get_status(headers)
+      status: get_status(headers),
+      peername: peer_name
     }
   end
 

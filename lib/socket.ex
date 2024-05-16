@@ -28,6 +28,10 @@ defmodule Kadabra.Socket do
     GenServer.call(pid, {:set_active, self()})
   end
 
+  def peername(pid) do
+    GenServer.call(pid, :peername)
+  end
+
   def start_link(uri, opts) do
     GenServer.start_link(__MODULE__, {uri, opts})
   end
@@ -120,7 +124,11 @@ defmodule Kadabra.Socket do
   def parse_bin(socket, bin, state) do
     case FrameParser.parse(bin) do
       {:ok, frame, rest} ->
-        :telemetry.execute([:kadabra, :socket, :recv_frame], %{}, %{frame: frame, socket: socket})
+        :telemetry.execute([:kadabra, :socket, :recv_frame], %{}, %{
+          frame: frame,
+          socket: socket
+        })
+
         Kernel.send(state.active_user, {:recv, frame})
         parse_bin(socket, rest, state)
 
@@ -132,12 +140,22 @@ defmodule Kadabra.Socket do
   # Internal socket helpers
 
   defp socket_send({:sslsocket, _, _} = pid, bin) do
-    :telemetry.execute([:kadabra, :socket, :send], %{}, %{type: :ssl, bin: bin, socket: pid})
+    :telemetry.execute([:kadabra, :socket, :send], %{}, %{
+      type: :ssl,
+      bin: bin,
+      socket: pid
+    })
+
     :ssl.send(pid, bin)
   end
 
   defp socket_send(pid, bin) do
-    :telemetry.execute([:kadabra, :socket, :send], %{}, %{type: :tcp, bin: bin, socket: pid})
+    :telemetry.execute([:kadabra, :socket, :send], %{}, %{
+      type: :tcp,
+      bin: bin,
+      socket: pid
+    })
+
     :gen_tcp.send(pid, bin)
   end
 
@@ -170,6 +188,10 @@ defmodule Kadabra.Socket do
     {:reply, :ok, state}
   end
 
+  def handle_call(:peername, _from, state) do
+    {:reply, get_peername(state.socket), state}
+  end
+
   # handle_info
 
   def handle_info(:send_preface, state) do
@@ -182,7 +204,11 @@ defmodule Kadabra.Socket do
   end
 
   def handle_info({:tcp_closed, socket}, state) do
-    :telemetry.execute([:kadabra, :socket, :closed], %{}, %{type: :tcp, socket: socket})
+    :telemetry.execute([:kadabra, :socket, :closed], %{}, %{
+      type: :tcp,
+      socket: socket
+    })
+
     Kernel.send(state.active_user, {:closed, self()})
     {:noreply, %{state | socket: nil}}
   end
@@ -192,8 +218,28 @@ defmodule Kadabra.Socket do
   end
 
   def handle_info({:ssl_closed, socket}, state) do
-    :telemetry.execute([:kadabra, :socket, :closed], %{}, %{type: :ssl, socket: socket})
+    :telemetry.execute([:kadabra, :socket, :closed], %{}, %{
+      type: :ssl,
+      socket: socket
+    })
+
     Kernel.send(state.active_user, {:closed, self()})
     {:noreply, %{state | socket: nil}}
   end
+
+  defp get_peername(pid = {:ssl, _, _}) do
+    case :ssl.peername(pid) do
+      {:ok, peername} -> peername
+      _ -> nil
+    end
+  end
+
+  defp get_peername({_, {_, pid, _, _}, _}) do
+    case :inet.peername(pid) do
+      {:ok, peername} -> peername
+      _ -> nil
+    end
+  end
+
+  defp get_peername(_), do: nil
 end
