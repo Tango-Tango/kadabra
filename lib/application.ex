@@ -9,6 +9,11 @@ defmodule Kadabra.Application do
       {Task.Supervisor, name: Kadabra.Tasks}
     ]
 
-    Supervisor.start_link(children, strategy: :one_for_one, name: :kadabra)
+    Supervisor.start_link(children,
+      strategy: :one_for_one,
+      max_restarts: 12,
+      max_seconds: 2,
+      name: :kadabra
+    )
   end
 end

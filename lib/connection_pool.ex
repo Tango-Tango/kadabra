@@ -12,6 +12,7 @@ defmodule Kadabra.ConnectionPool do
         }
 
   alias Kadabra.Connection
+  require Logger
 
   @spec start_link(URI.t(), pid, Keyword.t()) :: {:ok, pid}
   def start_link(uri, pid, opts) do
@@ -95,6 +96,11 @@ defmodule Kadabra.ConnectionPool do
   end
 
   def handle_info({:EXIT, _pid, {:shutdown, :connection_error}}, state) do
+    {:stop, :shutdown, state}
+  end
+
+  def handle_info({:EXIT, _pid, reason}, state) do
+    Logger.info("ConnectionPool exited with reason: #{inspect(reason)}.")
     {:stop, :shutdown, state}
   end
 
