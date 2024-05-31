@@ -79,7 +79,6 @@ defmodule Kadabra.Connection do
     GenServer.cast(pid, {:send, {:ping, data}})
   end
 
-
   # handle_cast
 
   def handle_cast({:send, type}, state) do
@@ -173,15 +172,23 @@ defmodule Kadabra.Connection do
     end
   end
 
+  # This may happen if the call to Socket.peername times out. In that case, we've
+  # already moved on, so just ignore it.
+  def handle_info({_ip, _port}, state), do: {:noreply, state}
+
   def terminate(reason, %{config: config, start_time: start_time}) do
     duration = System.monotonic_time() - start_time
-    :telemetry.execute([:kadabra, :connection, :stop],
+
+    :telemetry.execute(
+      [:kadabra, :connection, :stop],
       %{duration: duration},
       %{
         uri: config.uri,
         reason: reason,
         connection: self()
-      })
+      }
+    )
+
     Kernel.send(config.client, {:closed, config.queue})
     :ok
   end

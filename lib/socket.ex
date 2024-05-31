@@ -28,8 +28,8 @@ defmodule Kadabra.Socket do
     GenServer.call(pid, {:set_active, self()})
   end
 
-  def peername(pid) do
-    GenServer.call(pid, :peername)
+  def peername(pid, timeout_ms \\ 50) do
+    GenServer.call(pid, :peername, timeout_ms)
   end
 
   def start_link(uri, opts) do
