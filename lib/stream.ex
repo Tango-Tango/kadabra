@@ -98,26 +98,41 @@ defmodule Kadabra.Stream do
     {:stop, :normal, [{:reply, from, :ok}]}
   end
 
-  def recv(from, %Data{end_stream: true, data: data}, state, stream)
+  def recv(from, %Data{end_stream: true, data: data}, state, %Stream{} = stream)
       when state in [@hc_local] do
     :gen_statem.reply(from, :ok)
     stream = %Stream{stream | body: stream.body <> data}
     {:next_state, @closed, stream}
   end
 
-  def recv(from, %Data{end_stream: true, data: data}, _state, stream) do
+  def recv(
+        from,
+        %Data{end_stream: true, data: data},
+        _state,
+        %Stream{} = stream
+      ) do
     :gen_statem.reply(from, :ok)
     stream = %Stream{stream | body: stream.body <> data}
     {:next_state, @hc_remote, stream}
   end
 
-  def recv(from, %Data{end_stream: false, data: data}, _state, stream) do
+  def recv(
+        from,
+        %Data{end_stream: false, data: data},
+        _state,
+        %Stream{} = stream
+      ) do
     :gen_statem.reply(from, :ok)
     stream = %Stream{stream | body: stream.body <> data}
     {:keep_state, stream}
   end
 
-  def recv(from, %Headers{end_stream: end_stream?} = frame, _state, stream) do
+  def recv(
+        from,
+        %Headers{end_stream: end_stream?} = frame,
+        _state,
+        %Stream{} = stream
+      ) do
     case Hpack.decode(stream.decoder, frame.header_block_fragment) do
       {:ok, headers} ->
         :gen_statem.reply(from, :ok)
@@ -140,7 +155,7 @@ defmodule Kadabra.Stream do
     {:next_state, :closed, stream, [{:reply, from, :ok}]}
   end
 
-  def recv(from, %PushPromise{} = frame, state, stream)
+  def recv(from, %PushPromise{} = frame, state, %Stream{} = stream)
       when state in [@idle] do
     {:ok, headers} = Hpack.decode(stream.decoder, frame.header_block_fragment)
 
@@ -167,7 +182,7 @@ defmodule Kadabra.Stream do
     {:keep_state, %{stream | flow: flow}}
   end
 
-  def recv(from, %Continuation{} = frame, _state, stream) do
+  def recv(from, %Continuation{} = frame, _state, %Stream{} = stream) do
     {:ok, headers} = Hpack.decode(stream.decoder, frame.header_block_fragment)
 
     :gen_statem.reply(from, :ok)
@@ -345,11 +360,15 @@ defmodule Kadabra.Stream do
 
   def code_change(_vsn, state, data, _extra), do: {:ok, state, data}
 
+  defp try_get_peername(nil), do: nil
+
   defp try_get_peername(socket) do
     try do
       Socket.peername(socket)
     catch
       :exit, {:timeout, _} -> nil
+      :exit, {:noproc, _} -> nil
+      :exit, {:normal, _} -> nil
     end
   end
 end
